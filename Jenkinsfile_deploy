@@ -1,0 +1,39 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'buildno', defaultValue: '', description: 'Enter the Build no to deploy')
+        string(name: 'env', defaultValue: 'dev', description: 'Enter the Environment dev or prod')
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5', artifactNumToKeepStr: '5'))
+    }
+
+    stages {
+        stage('Pulling image') {
+            steps {
+                echo 'Pulling image from ECR'
+                script{
+                 withAWS(credentials:'AWS', region:'us-west-2') {
+                        sh"""
+                        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/z9r2r5c8
+                        docker pull public.ecr.aws/z9r2r5c8/sdms-backend:${buildno}
+                        docker image ls
+                        """
+                    }
+                }
+            }
+        }
+        stage('Deploying') {
+            steps {
+                sh"""
+                docker stop sdms-backend || true
+                docker rm sdms-backend || true
+                docker run -d --name sdms-backend -p 0.0.0.0:9000:8080 public.ecr.aws/z9r2r5c8/sdms-backend:${buildno}
+                docker ps
+                """
+            }
+        }
+    }
+}
